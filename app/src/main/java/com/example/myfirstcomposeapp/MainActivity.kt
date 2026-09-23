@@ -3,102 +3,156 @@ package com.example.myfirstcomposeapp
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.example.myfirstcomposeapp.ui.theme.MyFirstComposeAppTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    CourseDemoScreen()
-                }
-            }
+            MyFirstComposeAppTheme { AccountingApp() }
         }
     }
 }
 
+/** 三个页面共用的导航路由。 */
+private enum class AppDestination(val route: String, val label: String, val icon: String) {
+    HOME("home", "账单", "⌂"),
+    ADD("add", "记账", "＋"),
+    STAT("stat", "统计", "▥")
+}
+
 @Composable
-fun CourseDemoScreen() {
-    // 计数状态
-    var clickCount by remember { mutableIntStateOf(0) }
+fun AccountingApp() {
+    val navController = rememberNavController()
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        // 卡片
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            )
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "移动应用开发 · 第一课",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "Hello, Jetpack Compose!",
-                    fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                )
+    Scaffold(
+        bottomBar = {
+            NavigationBar {
+                AppDestination.entries.forEach { destination ->
+                    NavigationBarItem(
+                        selected = currentRoute == destination.route,
+                        onClick = {
+                            navController.navigate(destination.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        // 使用文字图标，避免为本实验额外引入图标依赖。
+                        icon = { Text(destination.icon) },
+                        label = { Text(destination.label) }
+                    )
+                }
             }
         }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // 按钮（改用内置文本标识，不再强依赖额外图标库）
-        Button(
-            onClick = { clickCount++ },
-            modifier = Modifier.fillMaxWidth(0.7f),
-            shape = RoundedCornerShape(12.dp)
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = AppDestination.HOME.route,
+            modifier = Modifier.padding(innerPadding)
         ) {
-            Text(text = "👍 点击互动", fontSize = 16.sp)
+            composable(AppDestination.HOME.route) { HomeScreen() }
+            composable(AppDestination.ADD.route) { AddScreen() }
+            composable(AppDestination.STAT.route) { StatScreen() }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 结果展示
-        Text(
-            text = "已累计点击：$clickCount 次",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.primary
-        )
     }
 }
 
 @Preview(showBackground = true)
 @Composable
-fun CourseDemoPreview() {
-    MaterialTheme {
-        CourseDemoScreen()
+fun AccountingAppPreview() {
+    MyFirstComposeAppTheme { AccountingApp() }
+}
+
+@Composable
+fun HomeScreen() {
+    ScreenColumn(title = "账单列表") {
+        Text("暂无账单记录", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+fun AddScreen() {
+    var amount by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf("") }
+
+    ScreenColumn(title = "添加账单") {
+        OutlinedTextField(
+            value = amount,
+            onValueChange = { amount = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("金额") },
+            placeholder = { Text("请输入金额") }
+        )
+        OutlinedTextField(
+            value = category,
+            onValueChange = { category = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("分类") },
+            placeholder = { Text("例如：餐饮") }
+        )
+        OutlinedTextField(
+            value = note,
+            onValueChange = { note = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("备注") },
+            placeholder = { Text("选填") }
+        )
+        Button(onClick = { }, modifier = Modifier.fillMaxWidth()) {
+            Text("保存")
+        }
+    }
+}
+
+@Composable
+fun StatScreen() {
+    ScreenColumn(title = "月度统计") {
+        Text(
+            text = "本月支出：¥0.00\n本月收入：¥0.00",
+            style = MaterialTheme.typography.bodyLarge
+        )
+    }
+}
+
+@Composable
+private fun ScreenColumn(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(PaddingValues(24.dp)),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        content()
     }
 }
