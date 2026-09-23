@@ -13,3 +13,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# 实验报告等本地文档，不进代码仓库
+/docs/
+
+# Word 打开文档时生成的临时锁文件
+~$*
