@@ -3,31 +3,39 @@ package com.example.myfirstcomposeapp
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.*
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.example.myfirstcomposeapp.data.Bill
+import com.example.myfirstcomposeapp.data.BillSampleData
+import com.example.myfirstcomposeapp.ui.add.AddScreen
+import com.example.myfirstcomposeapp.ui.detail.BillDetailScreen
+import com.example.myfirstcomposeapp.ui.home.HomeScreen
+import com.example.myfirstcomposeapp.ui.navigation.AddDestination
+import com.example.myfirstcomposeapp.ui.navigation.BillDetailDestination
+import com.example.myfirstcomposeapp.ui.navigation.HomeDestination
+import com.example.myfirstcomposeapp.ui.navigation.StatDestination
+import com.example.myfirstcomposeapp.ui.navigation.topLevelDestinations
+import com.example.myfirstcomposeapp.ui.stat.StatScreen
 import com.example.myfirstcomposeapp.ui.theme.MyFirstComposeAppTheme
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,50 +46,99 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** 三个页面共用的导航路由。 */
-private enum class AppDestination(val route: String, val label: String, val icon: String) {
-    HOME("home", "账单", "⌂"),
-    ADD("add", "记账", "＋"),
-    STAT("stat", "统计", "▥")
-}
-
+/**
+ * 应用入口：持有导航控制器、持有账单数据，再把两者分发给各个页面。
+ */
 @Composable
 fun AccountingApp() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
+    // 账单状态提升到这一层：底部导航来回切换、进详情再返回，列表数据都不会丢。
+    val bills = remember {
+        mutableStateListOf<Bill>().apply { addAll(BillSampleData.bills(10)) }
+    }
+
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                AppDestination.entries.forEach { destination ->
-                    NavigationBarItem(
-                        selected = currentRoute == destination.route,
-                        onClick = {
-                            navController.navigate(destination.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+            // 详情页不是顶层页面，进详情后隐藏底栏，避免详情下面还挂着三个 Tab。
+            val isTopLevel = topLevelDestinations.any { it.route == currentRoute }
+            if (isTopLevel) {
+                NavigationBar {
+                    topLevelDestinations.forEach { destination ->
+                        NavigationBarItem(
+                            selected = currentRoute == destination.route,
+                            onClick = {
+                                navController.navigate(destination.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        // 使用文字图标，避免为本实验额外引入图标依赖。
-                        icon = { Text(destination.icon) },
-                        label = { Text(destination.label) }
-                    )
+                            },
+                            icon = { Text(destination.icon) },
+                            label = { Text(destination.label) }
+                        )
+                    }
                 }
             }
         }
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = AppDestination.HOME.route,
+            startDestination = HomeDestination.route,
             modifier = Modifier.padding(innerPadding)
         ) {
-            composable(AppDestination.HOME.route) { HomeScreen() }
-            composable(AppDestination.ADD.route) { AddScreen() }
-            composable(AppDestination.STAT.route) { StatScreen() }
+            // 列表页不知道 NavController 的存在，它只把被点击的 id 交给上层。
+            composable(HomeDestination.route) {
+                HomeScreen(
+                    bills = bills,
+                    onOpenBill = { billId ->
+                        navController.navigate(BillDetailDestination.createRoute(billId))
+                    },
+                    onLoadSample = { count ->
+                        bills.clear()
+                        if (count > 0) bills.addAll(BillSampleData.bills(count))
+                    }
+                )
+            }
+            composable(AddDestination.route) {
+                AddScreen(onSave = { amount, category, note ->
+                    bills.add(
+                        0,
+                        Bill(
+                            id = (bills.maxOfOrNull { it.id } ?: 0L) + 1,
+                            amount = amount,
+                            category = category,
+                            note = note.ifBlank { "手动添加" },
+                            date = SimpleDateFormat("MM-dd", Locale.getDefault()).format(Date())
+                        )
+                    )
+                    navController.navigate(HomeDestination.route) {
+                        popUpTo(HomeDestination.route) { inclusive = false }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                })
+            }
+            composable(StatDestination.route) {
+                StatScreen(bills = bills)
+            }
+            composable(
+                route = BillDetailDestination.route,
+                arguments = listOf(
+                    navArgument(BillDetailDestination.ARG_BILL_ID) { type = NavType.LongType }
+                )
+            ) { entry ->
+                val billId = entry.arguments?.getLong(BillDetailDestination.ARG_BILL_ID) ?: -1L
+                BillDetailScreen(
+                    billId = billId,
+                    bill = bills.firstOrNull { it.id == billId },
+                    onBack = { navController.popBackStack() }
+                )
+            }
         }
     }
 }
@@ -90,69 +147,4 @@ fun AccountingApp() {
 @Composable
 fun AccountingAppPreview() {
     MyFirstComposeAppTheme { AccountingApp() }
-}
-
-@Composable
-fun HomeScreen() {
-    ScreenColumn(title = "账单列表") {
-        Text("暂无账单记录", color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-fun AddScreen() {
-    var amount by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
-
-    ScreenColumn(title = "添加账单") {
-        OutlinedTextField(
-            value = amount,
-            onValueChange = { amount = it },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("金额") },
-            placeholder = { Text("请输入金额") }
-        )
-        OutlinedTextField(
-            value = category,
-            onValueChange = { category = it },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("分类") },
-            placeholder = { Text("例如：餐饮") }
-        )
-        OutlinedTextField(
-            value = note,
-            onValueChange = { note = it },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("备注") },
-            placeholder = { Text("选填") }
-        )
-        Button(onClick = { }, modifier = Modifier.fillMaxWidth()) {
-            Text("保存")
-        }
-    }
-}
-
-@Composable
-fun StatScreen() {
-    ScreenColumn(title = "月度统计") {
-        Text(
-            text = "本月支出：¥0.00\n本月收入：¥0.00",
-            style = MaterialTheme.typography.bodyLarge
-        )
-    }
-}
-
-@Composable
-private fun ScreenColumn(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(PaddingValues(24.dp)),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
-        content()
-    }
 }
