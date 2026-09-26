@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 13+ 的主题图标层：系统只取透明通道，再用主题色重新上色，
+  所以这里必须是单色剪影。小票加镂空在小尺寸下会糊，直接放大的 ¥ 更清楚。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M34,28L54,50M74,28L54,50M54,50L54,80M36,57L72,57M36,68L72,68"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="10"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
